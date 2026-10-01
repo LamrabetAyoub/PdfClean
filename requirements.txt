@@ -1,0 +1,35 @@
+# OCR-only API — install with:  pip install -r requirements.txt
+#
+# These are NOT enough on their own. Two system binaries must also be present:
+#
+#   Ubuntu/Debian : sudo apt install tesseract-ocr poppler-utils
+#                   sudo apt install tesseract-ocr-fra tesseract-ocr-ara   (extra languages)
+#   macOS         : brew install tesseract tesseract-lang poppler
+#   Windows       : install Tesseract (UB-Mannheim build) + Poppler, add both bin/ dirs to PATH
+#
+# pytesseract and pdf2image are thin wrappers — they fail at runtime, not install
+# time, if the binaries are missing. deps.py checks for them on startup.
+#
+# No AI model is required. This is the reusable OCR layer, separated from the
+# vision/form extraction of the original OCR-Formulaire project.
+
+# --- OCR pipeline ---
+pytesseract==0.3.13      # Tesseract wrapper
+pdf2image==1.17.0        # PDF page -> PIL image, via poppler's pdftoppm
+pypdf==5.9.0             # merge pages, read/write text layer and metadata
+pillow==11.3.0           # image handling and pre-processing
+
+# --- scanned-document cleaning (image_clean.py) ---
+numpy==2.2.6             # numerical image passes (flat-field, thresholds)
+scipy==1.15.3            # morphology, filters, connected components, Sauvola
+
+# --- HTTP API ---
+flask==3.1.1
+flask-cors==6.0.5        # browser access from the frontend's origin
+waitress==3.0.2          # production server; works on Windows
+
+# --- configuration ---
+python-dotenv==1.0.1    # load local .env configuration safely
+
+# --- OCR fallback and tools ---
+img2pdf==0.6.1

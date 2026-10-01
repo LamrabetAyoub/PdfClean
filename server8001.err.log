@@ -1,0 +1,7 @@
+INFO:waitress:Serving on http://127.0.0.1:8001
+WARNING:pypdf._reader:invalid pdf header: b'\x0eAyou'
+WARNING:pypdf._reader:EOF marker not found
+WARNING:pypdf._reader:invalid pdf header: b'\x0eAyou'
+WARNING:pypdf._reader:EOF marker not found
+WARNING:pypdf._reader:EOF marker not found
+WARNING:pypdf._reader:EOF marker not found

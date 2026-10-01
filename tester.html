@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Cleaner — nettoyage et OCR</title>
+<style>
+  :root {
+    --ink:#162033; --mut:#64748b; --line:#dbe4ef; --surface:#ffffff;
+    --bg:#f4f7fb; --accent:#2563eb; --accent-dark:#1d4ed8; --soft:#eff5ff;
+    --ok:#15803d; --ok-bg:#ecfdf3; --err:#b42318; --err-bg:#fff1f0;
+    --shadow:0 18px 45px rgba(30,58,95,.08); --radius:18px;
+  }
+  * { box-sizing:border-box; }
+  html { min-height:100%; }
+  body {
+    min-height:100vh; margin:0; color:var(--ink);
+    background:radial-gradient(circle at 8% 0%, #e5efff 0, transparent 32rem), var(--bg);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  main { max-width:1100px; margin:0 auto; padding:38px 20px 52px; }
+  .hero { display:flex; justify-content:space-between; align-items:flex-end;
+          gap:24px; margin-bottom:24px; }
+  .eyebrow { color:var(--accent); font-size:11px; font-weight:800;
+             letter-spacing:.14em; text-transform:uppercase; }
+  h1 { margin:8px 0 10px; font-size:clamp(28px,4vw,40px); line-height:1.08;
+       letter-spacing:-.035em; }
+  h1 span { color:var(--accent); }
+  .hero p { max-width:650px; margin:0; color:var(--mut); font-size:15px; }
+  .api-badge { flex:0 0 auto; display:inline-flex; align-items:center; gap:8px;
+               padding:9px 12px; border:1px solid #cfe0ff; border-radius:99px;
+               background:rgba(255,255,255,.78); color:var(--accent);
+               font-size:12px; font-weight:700; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#22c55e;
+         box-shadow:0 0 0 4px rgba(34,197,94,.14); }
+  .card { background:var(--surface); border:1px solid rgba(219,228,239,.9);
+          border-radius:var(--radius); padding:22px; margin:16px 0;
+          box-shadow:var(--shadow); }
+  .card-title { display:flex; justify-content:space-between; align-items:center;
+                gap:16px; margin-bottom:18px; }
+  .card-title h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
+  .card-title p { margin:4px 0 0; color:var(--mut); font-size:13px; }
+  .badge { display:inline-flex; align-items:center; padding:5px 9px;
+           border-radius:99px; background:var(--soft); color:var(--accent);
+           font-size:11px; font-weight:800; letter-spacing:.04em; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .upload-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .picker { position:relative; display:flex; align-items:center; gap:13px;
+            min-height:88px; padding:15px; border:1px dashed #b7c8e0;
+            border-radius:14px; background:#fbfdff; cursor:pointer;
+            transition:border-color .18s, background .18s, transform .18s; }
+  .picker:hover { border-color:var(--accent); background:var(--soft); transform:translateY(-1px); }
+  .picker:focus-within { outline:3px solid rgba(37,99,235,.18); outline-offset:2px; }
+  .picker-icon { flex:0 0 44px; height:44px; display:grid; place-items:center;
+                 border-radius:13px; background:var(--soft); color:var(--accent);
+                 font-size:11px; font-weight:800; letter-spacing:.05em; }
+  .picker.folder .picker-icon { background:#ecfdf5; color:#047857; }
+  .picker strong { display:block; font-size:14px; }
+  .picker small { display:block; margin-top:2px; color:var(--mut); font-size:12px; }
+  .picker-input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+  .selection { margin-top:14px; padding:12px 14px; border:1px solid var(--line);
+               border-radius:12px; background:#f8fafc; color:var(--mut); font-size:13px; }
+  .selection.ready { border-color:#bfdbfe; background:var(--soft); color:#1e40af; }
+  .selection.invalid { border-color:#fecaca; background:var(--err-bg); color:var(--err); }
+  .options { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+             margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
+  .control { display:inline-flex; align-items:center; gap:8px; color:var(--mut);
+             font-size:13px; font-weight:600; }
+  .control select { min-width:210px; }
+  select { appearance:none; padding:10px 34px 10px 12px; border:1px solid var(--line);
+           border-radius:10px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E") no-repeat right 12px center;
+           color:var(--ink); font:inherit; font-size:13px; }
+  button { border:0; border-radius:10px; padding:10px 15px; cursor:pointer;
+           font:inherit; font-size:13px; font-weight:700; transition:background .18s, transform .18s; }
+  button:hover:not(:disabled) { transform:translateY(-1px); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--accent); color:#fff; box-shadow:0 8px 18px rgba(37,99,235,.2); }
+  button.primary:hover:not(:disabled) { background:var(--accent-dark); }
+  button.ghost { background:#fff; color:var(--accent); border:1px solid #bcd0f7; }
+  button.ghost:hover:not(:disabled) { background:var(--soft); }
+  .run { margin-left:auto; min-width:190px; }
+  .mut { color:var(--mut); }
+  .footnote { margin-top:14px; color:var(--mut); font-size:12px; }
+  .status-card { border-left:4px solid var(--accent); }
+  .status-line { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .status-pill { display:inline-flex; align-items:center; padding:6px 10px;
+                 border-radius:99px; background:var(--soft); color:var(--accent);
+                 font-size:12px; }
+  .status-pill.ok { background:var(--ok-bg); color:var(--ok); }
+  .status-pill.err { background:var(--err-bg); color:var(--err); }
+  .bar { height:9px; margin-top:16px; overflow:hidden; border-radius:99px; background:#eaf0f7; }
+  .fill { width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--accent),#60a5fa);
+          transition:width .3s ease; }
+  .card.err { border-color:#f4b8b3; background:var(--err-bg); color:var(--err); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .preview-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+                     margin-bottom:16px; }
+  .preview { display:flex; gap:14px; flex-wrap:wrap; }
+  .preview figure { flex:1 1 300px; margin:0; }
+  .preview img { width:100%; border:1px solid var(--line); border-radius:12px;
+                 background:#fff; box-shadow:0 8px 20px rgba(30,58,95,.06); }
+  .preview figcaption { margin-top:6px; color:var(--mut); font-size:12px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:10px 9px; border-bottom:1px solid var(--line); text-align:left;
+           vertical-align:top; }
+  th { color:var(--mut); font-size:11px; font-weight:800; letter-spacing:.04em;
+       text-transform:uppercase; }
+  td.mono, .mono { font-family:Consolas,monospace; font-size:12px; }
+  .hid { display:none; }
+  footer { margin-top:26px; color:var(--mut); font-size:12px; text-align:center; }
+  @media (max-width:720px) {
+    main { padding:26px 14px 40px; }
+    .hero { display:block; }
+    .api-badge { margin-top:18px; }
+    .upload-grid { grid-template-columns:1fr; }
+    .options { align-items:stretch; }
+    .control, .control select, .run { width:100%; }
+    .run { margin-left:0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">PDF cleaner · OCR local</div>
+      <h1>Nettoyez vos scans.<br><span>Transformez-les en PDF lisibles.</span></h1>
+      <p>Sélectionnez un PDF ou un dossier complet. Le nettoyage et l’OCR sont traités localement, sans modifier vos originaux.</p>
+    </div>
+    <div class="api-badge"><span class="dot"></span> API locale</div>
+  </header>
+
+  <section class="card status-card" id="statusCard" style="display:none">
+    <div class="status-line">
+      <strong class="status-pill" id="jobStatus"></strong>
+      <span class="mut" id="jobMeta"></span>
+    </div>
+    <div class="bar"><div class="fill" id="jobBar"></div></div>
+    <div class="mut" id="jobNote" style="margin-top:8px"></div>
+  </section>
+
+  <div class="card" id="errorCard" style="display:none"></div>
+
+  <section class="card" id="uploadCard">
+    <div class="card-title">
+      <div>
+        <h2>Importer des documents</h2>
+        <p>Un seul PDF ou jusqu’à 100 PDF dans un dossier.</p>
+      </div>
+      <span class="badge">PDF uniquement</span>
+    </div>
+
+    <div class="upload-grid">
+      <label class="picker" for="file">
+        <span class="picker-icon">PDF</span>
+        <span><strong>Choisir un PDF</strong><small>Un document à traiter</small></span>
+        <input class="picker-input" type="file" id="file" accept=".pdf,application/pdf">
+      </label>
+      <label class="picker folder" for="folder">
+        <span class="picker-icon">DIR</span>
+        <span><strong>Choisir un dossier</strong><small>Tous les PDF du dossier</small></span>
+        <input class="picker-input" type="file" id="folder" webkitdirectory directory multiple accept=".pdf,application/pdf">
+      </label>
+    </div>
+
+    <div class="selection" id="selectionText">Aucun document sélectionné</div>
+
+    <div class="options">
+      <button class="primary run" id="run">Lancer le traitement</button>
+    </div>
+
+    <div class="footnote">Nettoyage automatique · un seul PDF est produit : il contient les pages nettoyées et la couche de texte OCR. Les originaux ne sont jamais modifiés.</div>
+  </section>
+
+  <section class="card hid" id="resultsCard">
+    <div class="card-title">
+      <div>
+        <h2>Résultats</h2>
+        <p class="mut" id="resultMeta"></p>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btnDownload">Télécharger le PDF nettoyé</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card hid" id="previewCard">
+    <div class="card-title">
+      <div>
+        <h2>Aperçu par page</h2>
+        <p>Comparaison avant / après nettoyage.</p>
+      </div>
+    </div>
+    <div class="preview-controls">
+      <label class="control" for="pDoc">Document <select id="pDoc"></select></label>
+      <label class="control" for="pPage">Page <select id="pPage"></select></label>
+      <button class="ghost" id="btnPrev" aria-label="Page précédente">&lt;</button>
+      <button class="ghost" id="btnNext" aria-label="Page suivante">&gt;</button>
+    </div>
+    <div class="preview">
+      <figure>
+        <img id="pOrig" alt="Original">
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure>
+        <img id="pClean" alt="Nettoyé">
+        <figcaption>Nettoyé</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div id="docsTable" class="card hid"></div>
+
+</main>
+
+<script>
+const API = location.origin;
+const fileInput = document.getElementById('file');
+const folderInput = document.getElementById('folder');
+const selectionText = document.getElementById('selectionText');
+const runButton = document.getElementById('run');
+let JOB = null;
+let LAST = null;
+let timer = null;
+let maxBatchUploadMb = 0;
+let maxFilesPerBatch = 100;
+
+async function showHealth() {
+  try {
+    const h = await (await fetch(API + '/api/health')).json() ;
+    if (h.maxBatchUploadMb) maxBatchUploadMb = h.maxBatchUploadMb;
+    if (h.maxFilesPerBatch) maxFilesPerBatch = h.maxFilesPerBatch;
+  } catch (e) {
+    maxBatchUploadMb = 0;
+    maxFilesPerBatch = 100;
+  }
+}
+showHealth();
+
+function isPdf(file) {
+  return file.name.toLowerCase().endsWith('.pdf');
+}
+
+function selectedFiles() {
+  const folderFiles = Array.from(folderInput.files || []);
+  if (folderFiles.length) return folderFiles.filter(isPdf);
+  const file = fileInput.files[0];
+  return file && isPdf(file) ? [file] : [];
+}
+
+function updateSelection() {
+  const folderFiles = Array.from(folderInput.files || []);
+  selectionText.classList.remove('ready', 'invalid');
+  if (folderFiles.length) {
+    const pdfFiles = folderFiles.filter(isPdf);
+    selectionText.textContent = pdfFiles.length
+      ? `${pdfFiles.length} PDF${pdfFiles.length > 1 ? 's' : ''} dans le dossier sélectionné`
+      : 'Ce dossier ne contient aucun PDF.';
+    selectionText.classList.add(pdfFiles.length ? 'ready' : 'invalid');
+  } else if (fileInput.files.length) {
+    const file = fileInput.files[0];
+    if (isPdf(file)) {
+      selectionText.textContent = file.name;
+      selectionText.classList.add('ready');
+    } else {
+      selectionText.textContent = 'Format non pris en charge : choisissez un PDF.';
+      selectionText.classList.add('invalid');
+    }
+  } else {
+    selectionText.textContent = 'Aucun document sélectionné';
+  }
+  runButton.disabled = selectedFiles().length === 0;
+}
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) folderInput.value = '';
+  updateSelection();
+});
+folderInput.addEventListener('change', () => {
+  if (folderInput.files.length) fileInput.value = '';
+  updateSelection();
+});
+updateSelection();
+
+document.getElementById('run').addEventListener('click', async () => {
+  const files = selectedFiles();
+  if (!files.length) {
+    return alert(folderInput.files.length
+      ? 'Le dossier sélectionné ne contient aucun PDF.'
+      : 'Choisissez un PDF ou un dossier de PDF.');
+  }
+  if (files.length > maxFilesPerBatch) {
+    return alert(`Sélectionnez au maximum ${maxFilesPerBatch} PDF à la fois.`);
+  }
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
+  if (maxBatchUploadMb && totalBytes > maxBatchUploadMb * 1024 * 1024) {
+    return alert(`La sélection dépasse la limite de ${maxBatchUploadMb} Mo.`);
+  }
+  const fd = new FormData();
+  files.forEach(file => fd.append('file', file, file.name));
+  fd.append('clean', '1');
+  fd.append('cleanMode', 'auto');
+  runButton.disabled = true;
+  resetResults();
+  try {
+    const r = await fetch(API + '/api/jobs', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
+    JOB = j.id;
+    document.getElementById('statusCard').style.display = '';
+    document.getElementById('errorCard').style.display = 'none';
+    document.getElementById('errorCard').textContent = '';
+    startPolling();
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    runButton.disabled = false;
+  }
+});
+
+function resetResults() {
+  ['resultsCard', 'previewCard', 'docsTable'].forEach(id => {
+    document.getElementById(id).classList.add('hid');
+  });
+  LAST = null;
+}
+
+function startPolling() {
+  clearInterval(timer);
+  timer = setInterval(poll, 700);
+}
+
+async function poll() {
+  const r = await fetch(API + '/api/jobs/' + JOB);
+  const j = await r.json();
+  const status = document.getElementById('jobStatus');
+  const meta = document.getElementById('jobMeta');
+  const note = document.getElementById('jobNote');
+  const bar = document.getElementById('jobBar');
+  status.textContent = {queued:'En file', running:'Traitement', done:'Terminé',
+                        error:'Erreur'}[j.status] || j.status;
+  status.className = 'status-pill' + (j.status === 'done' ? ' ok'
+    : (j.status === 'error' ? ' err' : ''));
+  const stageLabel = {cleaning:'nettoyage', ocr:'OCR'}[j.stage] || j.stage;
+  meta.textContent = ` · stage ${stageLabel} · doc ${j.documentsDone}/${j.documentCount}`;
+  let done = j.documentsDone, total = j.documentCount || 1;
+  j.documents.forEach(d => { if (d.status === 'done') done = Math.max(done, d.index + 1); });
+  bar.style.width = Math.round((done / total) * 100) + '%';
+  const d = j.documents[j.currentDocument] || {};
+  const dnote = d.note ? ` — ${d.note}` : '';
+  note.textContent =
+     `${d.filename||''} ${d.pagesDone||0}/${d.pageCount||'?'} pages${dnote}` +
+     (d.cleaning ? ` · mode ${d.cleaning.mode}` : '');
+  if (j.status === 'done' || j.status === 'error') {
+    clearInterval(timer);
+    if (j.status === 'done') showResults(j);
+    else showError(j.error?.message || 'Échec du traitement.');
+  }
+}
+
+function showResults(j) {
+  LAST = j;
+  document.getElementById('resultsCard').classList.remove('hid');
+  const meta = document.getElementById('resultMeta');
+  const kind = j.resultKind === 'zip' ? 'ZIP (' + j.documentCount + ' fichiers)' : 'PDF';
+  const cleaned = j.clean ? 'pages nettoyées' : 'non nettoyé';
+  meta.textContent =
+    `${kind} unique · ${cleaned} · texte OCR inclus · ` +
+    `caractères ${j.charsAfter} · ${Math.round(j.elapsedSeconds)} s`;
+  const download = document.getElementById('btnDownload');
+  download.textContent = 'Télécharger le PDF nettoyé + texte';
+  download.onclick = () =>
+    location.href = API + '/api/jobs/' + JOB + '/file?download=1';
+  buildPreview(j);
+  buildDocsTable(j);
+}
+
+function buildDocsTable(j) {
+  const wrap = document.getElementById('docsTable');
+  wrap.classList.remove('hid');
+  const rows = j.documents.map(d =>
+    `<tr><td class="mono">${d.index}</td><td>${escapeHtml(d.filename)}</td>` +
+    `<td>${d.status}</td>` +
+    `<td>${d.cleaning
+        ? `mode ${d.cleaning.mode} · ${d.cleaning.previewPages} pages d'aperçu`
+        : '—'}</td>` +
+    `<td>${d.charsAfter ?? (d.status==='done' ? '—' : '')}</td>` +
+    `<td>${d.error ? `<span class="err">${escapeHtml(errorText(d.error))}</span>` : ''}</td></tr>`
+  ).join('');
+  wrap.innerHTML =
+    `<div class="card-title"><div><h2>Documents</h2><p>État du traitement pour chaque PDF.</p></div></div>
+     <div class="table-wrap"><table><thead><tr><th>#</th><th>Fichier</th><th>État</th><th>Nettoyage</th>
+     <th>Car. OCR</th><th>Erreur</th></tr></thead>
+     <tbody>${rows}</tbody></table></div>`;
+}
+
+function buildPreview(j) {
+  const previewDocs = j.documents.filter(d => d.status === 'done' && d.cleaning);
+  if (!previewDocs.length) return;
+  const card = document.getElementById('previewCard');
+  card.classList.remove('hid');
+  const selD = document.getElementById('pDoc');
+  selD.innerHTML = previewDocs.map((d, i) =>
+    `<option value="${d.index}">${i + 1} — ${escapeHtml(d.filename)}</option>`).join('');
+  buildPageList(j);
+}
+
+function buildPageList(j) {
+  const d = j.documents.find(x => x.status === 'done' && x.cleaning && x.index == document.getElementById('pDoc').value);
+  if (!d) return;
+  const selP = document.getElementById('pPage');
+  selP.innerHTML = d.cleaning.previewPages.map(p => `<option value="${p}">${p}</option>`).join('');
+  showPreview(j);
+}
+
+async function showPreview(j) {
+  const index = document.getElementById('pDoc').value;
+  const page = document.getElementById('pPage').value;
+  const q = `?side=%s&page=${page}`;
+  document.getElementById('pOrig').src = API + `/api/jobs/${JOB}/documents/${index}/preview` + q.replace('%s', 'original');
+  document.getElementById('pClean').src = API + `/api/jobs/${JOB}/documents/${index}/preview` + q.replace('%s', 'cleaned');
+}
+document.getElementById('pDoc').addEventListener('change', () => buildPageList(LAST));
+document.getElementById('pPage').addEventListener('change', () => showPreview(LAST));
+document.getElementById('btnPrev').addEventListener('click', () => {
+  const s = document.getElementById('pPage');
+  s.selectedIndex = Math.max(0, s.selectedIndex - 1);
+  showPreview(LAST);
+});
+document.getElementById('btnNext').addEventListener('click', () => {
+  const s = document.getElementById('pPage');
+  s.selectedIndex = Math.min(s.options.length - 1, s.selectedIndex + 1);
+  showPreview(LAST);
+});
+
+function showError(msg) {
+  const c = document.getElementById('errorCard');
+  c.style.display = '';
+  c.className = 'card err';
+  c.textContent = 'Erreur : ' + msg;
+}
+function errorText(error) {
+  if (!error) return '';
+  return typeof error === 'object' ? (error.message || error.code || '') : String(error);
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
